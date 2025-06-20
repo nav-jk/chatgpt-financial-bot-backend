@@ -1,4 +1,4 @@
-##  Setup Instructions
+##  Setup Instructions(Backend)
 
 ### 1. Clone the Repository
 
@@ -44,3 +44,22 @@ Clears the chat history stored in database.json.
 ```json
 { "message": "Chat history has been cleared" }
 ```
+##  Setup Instructions(Frontend)
+
+Move to root directory and 
+```bash
+cd financial-bot-frontend
+```
+
+```bash
+npm install
+npm start
+```
+Or optionally
+```bash
+npm run dev
+```
+
+```The app should open in your browser at http://localhost:3000.```
+
+```The frontend expects the backend to run at http://localhost:8000 if not make required changes in App.jsx```
