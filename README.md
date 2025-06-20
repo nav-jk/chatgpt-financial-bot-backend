@@ -4,7 +4,7 @@
 
 ```bash
 git clone https://github.com/nav-jk/chatgpt-financial-bot-backend.git
-cd chatgpt-financial-bot-backend
+cd chatgpt-financial-bot-backend/chatgpt-financial-bot-backend
 ```
 
 ### 2. Install Dependencies
