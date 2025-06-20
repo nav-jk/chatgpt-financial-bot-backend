@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from dotenv import load_dotenv
@@ -8,11 +8,12 @@ import openai
 import os
 import json
 import requests
+import uuid
 
 load_dotenv()
 
 openai.api_key = os.getenv("OPEN_AI_KEY")
-openai.organization = os.getenv("OPEN_AI_ORG")
+# openai.organization = os.getenv("OPEN_AI_ORG")
 elevenlabs_key = os.getenv("ELEVENLABS_KEY")
 
 app = FastAPI()
@@ -40,26 +41,28 @@ async def root():
 async def post_audio(file: UploadFile):
     user_message = transcribe_audio(file)
     chat_response = get_chat_response(user_message)
-    audio_output = text_to_speech(chat_response)
+    audio_path = text_to_speech(chat_response)
 
-    def iterfile():
-        yield audio_output
-
-    return StreamingResponse(iterfile(), media_type="application/octet-stream")
+    # Return the saved audio file as a downloadable response
+    return FileResponse(
+        path=audio_path,
+        media_type="audio/mpeg",
+        filename="output.mp3"
+    )
 
 @app.get("/clear")
 async def clear_history():
     file = 'database.json'
-    open(file, 'w')
+    open(file, 'w').close()
     return {"message": "Chat history has been cleared"}
 
-# Functions
+# ------------------- Helper Functions -----------------------
+
 def transcribe_audio(file):
-    # Save the blob first
     with open(file.filename, 'wb') as buffer:
         buffer.write(file.file.read())
-    audio_file = open(file.filename, "rb")
-    transcript = openai.Audio.transcribe("whisper-1", audio_file)
+    with open(file.filename, "rb") as audio_file:
+        transcript = openai.Audio.transcribe("whisper-1", audio_file)
     print(transcript)
     return transcript
 
@@ -67,24 +70,19 @@ def get_chat_response(user_message):
     messages = load_messages()
     messages.append({"role": "user", "content": user_message['text']})
 
-    # Send to ChatGpt/OpenAi
-    gpt_response = gpt_response = openai.ChatCompletion.create(
+    gpt_response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=messages
-        )
+    )
 
     parsed_gpt_response = gpt_response['choices'][0]['message']['content']
-
-    # Save messages
     save_messages(user_message['text'], parsed_gpt_response)
-
     return parsed_gpt_response
 
 def load_messages():
     messages = []
     file = 'database.json'
-
-    empty = os.stat(file).st_size == 0
+    empty = not os.path.exists(file) or os.stat(file).st_size == 0
 
     if not empty:
         with open(file) as db_file:
@@ -93,7 +91,11 @@ def load_messages():
                 messages.append(item)
     else:
         messages.append(
-            {"role": "system", "content": "You are interviewing the user for a front-end React developer position. Ask short questions that are relevant to a junior level developer. Your name is Greg. The user is Travis. Keep responses under 30 words and be funny sometimes."}
+            {
+                "role": "system",
+                "content": "You are Finny, a friendly and witty financial assistant bot helping the user manage their personal and business finances. Ask short, smart questions to understand their spending, income, or goals. Keep responses helpful, under 30 words, and occasionally add a friendly joke or pun."
+            }
+
         )
     return messages
 
@@ -107,7 +109,7 @@ def save_messages(user_message, gpt_response):
 
 def text_to_speech(text):
     voice_id = 'pNInz6obpgDQGcFmaJgB'
-    
+
     body = {
         "text": text,
         "model_id": "eleven_monolingual_v1",
@@ -130,14 +132,16 @@ def text_to_speech(text):
     try:
         response = requests.post(url, json=body, headers=headers)
         if response.status_code == 200:
-            return response.content
+            # Save audio content to unique file
+            filename = f"response_{uuid.uuid4()}.mp3"
+            filepath = os.path.join("audio", filename)
+            os.makedirs("audio", exist_ok=True)
+            with open(filepath, "wb") as f:
+                f.write(response.content)
+            return filepath
         else:
-            print('something went wrong')
+            print("Something went wrong:", response.text)
+            return None
     except Exception as e:
-        print(e)
-
-
-#1. Send in audio, and have it transcribed
-#2. We want to send it to chatgpt and get a response
-#3. We want to save the chat history to send back and forth for context.
-
+        print("Error:", e)
+        return None
